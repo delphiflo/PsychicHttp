@@ -26,6 +26,7 @@ class PsychicHandler
 
     std::list<PsychicClient*> _clients;
 
+
   public:
     PsychicHandler();
     virtual ~PsychicHandler();

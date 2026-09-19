@@ -66,6 +66,7 @@ class PsychicEventSource : public PsychicHandler
   private:
     PsychicEventSourceClientCallback _onOpen;
     PsychicEventSourceClientCallback _onClose;
+    SemaphoreHandle_t _mutex = NULL; // FLO
 
   public:
     PsychicEventSource();
