@@ -2,7 +2,6 @@
 
 PsychicHandler::PsychicHandler()
 {
-
 }
 
 PsychicHandler::~PsychicHandler()
@@ -11,9 +10,7 @@ PsychicHandler::~PsychicHandler()
   // actual PsychicClient deletion handled by PsychicServer
   // for (PsychicClient *client : _clients)
   //   delete(client);
-
   _clients.clear();
-
 }
 
 PsychicHandler* PsychicHandler::addFilter(PsychicRequestFilterFunction fn)
@@ -80,9 +77,10 @@ PsychicClient* PsychicHandler::getClient(int socket)
   if (!_server->hasClient(socket))
     return NULL;
 
+  // what about us?
   for (PsychicClient* client : _clients)
-    if (client->socket() == socket) 
-      return client;       
+    if (client->socket() == socket)
+      return client;
 
   // nothing found.
   return NULL;
