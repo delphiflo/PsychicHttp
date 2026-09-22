@@ -44,9 +44,14 @@ class PsychicHttpServer
     esp_err_t _process(PsychicRequest* request);
     bool _filter(PsychicRequest* request);
 
+    SemaphoreHandle_t _clientsMutex = NULL; // FLO
+
   public:
     PsychicHttpServer(uint16_t port = 80);
     virtual ~PsychicHttpServer();
+
+    bool TakeMutexForClients();
+    void GiveMutexForClients();
 
     // what methods to support
     std::list<http_method> supported_methods = {

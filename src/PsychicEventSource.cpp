@@ -30,15 +30,15 @@ PsychicEventSource::PsychicEventSource() : PsychicHandler(),
                                            _onOpen(nullptr),
                                            _onClose(nullptr)
 {
-  _mutex = xSemaphoreCreateMutex();
+ // _mutex = xSemaphoreCreateMutex();
 }
 
 PsychicEventSource::~PsychicEventSource()
 {
-  if (_mutex != NULL) {
-    vSemaphoreDelete(_mutex); 
-    _mutex = NULL;
-  }
+ // if (_mutex != NULL) {
+ //   vSemaphoreDelete(_mutex); 
+ //   _mutex = NULL;
+ // }
 }
 
 PsychicEventSourceClient* PsychicEventSource::getClient(int socket)
@@ -95,17 +95,17 @@ PsychicEventSource* PsychicEventSource::onClose(PsychicEventSourceClientCallback
 
 void PsychicEventSource::addClient(PsychicClient* client)
 {
-  if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO
+ // if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO
 
   client->_friend = new PsychicEventSourceClient(client);
   PsychicHandler::addClient(client);
 
-  if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO
+ // if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO
 }
 
 void PsychicEventSource::removeClient(PsychicClient* client)
 {
-  if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO
+ // if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO
 
   auto buddy = static_cast<PsychicEventSourceClient*>(client->_friend);
   if (buddy) {
@@ -114,12 +114,12 @@ void PsychicEventSource::removeClient(PsychicClient* client)
   }
   PsychicHandler::removeClient(client);  
 
-  if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO
+ // if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO
 }
 
 void PsychicEventSource::openCallback(PsychicClient* client)
 {
-  if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO neu
+ // if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO neu
 
   PsychicEventSourceClient* buddy = getClient(client);
   if (buddy != nullptr) {   
@@ -127,12 +127,12 @@ void PsychicEventSource::openCallback(PsychicClient* client)
       _onOpen(buddy);
   }
 
-  if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO neu  
+ // if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO neu  
 }
 
 void PsychicEventSource::closeCallback(PsychicClient* client)
 {
-  if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO neu
+ // if (_mutex != NULL) xSemaphoreTake(_mutex, portMAX_DELAY); // FLO neu
 
   PsychicEventSourceClient* buddy = getClient(client);
   if (buddy != nullptr) {
@@ -140,7 +140,7 @@ void PsychicEventSource::closeCallback(PsychicClient* client)
       _onClose(getClient(buddy));
   }
 
-  if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO neu
+ // if (_mutex != NULL) xSemaphoreGive(_mutex); // FLO neu
 }
 
 /**
@@ -152,7 +152,8 @@ void PsychicEventSource::closeCallback(PsychicClient* client)
  */
 void PsychicEventSource::send(const char* message, const char* event, uint32_t id, uint32_t reconnect)
 {
-  if (_mutex == NULL || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;   // FLO
+  //if (_mutex == NULL || xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return;   // FLO
+  if (!(_server->TakeMutexForClients())) return; // FLO
 
   auto ev = generateEventMessage(message, event, id, reconnect);
   std::vector<PsychicClient*> clientsToRemove;
@@ -164,11 +165,13 @@ void PsychicEventSource::send(const char* message, const char* event, uint32_t i
     }
   } 
   
-  xSemaphoreGive(_mutex);  // FLO
+ // xSemaphoreGive(_mutex);  // FLO
 
   for (PsychicClient* c : clientsToRemove) removeClient(c);  // FLO
   
   for (PsychicClient* c : clientsToRemove)  closeCallback(c); // FLO
+
+  _server->GiveMutexForClients(); // FLO
 }
 
 /*****************************************/
@@ -200,10 +203,10 @@ bool PsychicEventSourceClient::send(const char* message, const char* event, uint
 bool PsychicEventSourceClient::sendEvent(const char* event)
 {
   int result;
-  uint32_t startmillis = millis();
+  uint32_t startmillis = millis(); // FLO
   do {
     result = httpd_socket_send(this->server(), this->socket(), event, strlen(event), 0);
-  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL));  
+  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL)); // FLO  
 
   if (result < 0) {
     ESP_LOGD(PH_TAG, "sendEvent to socket %d failed. Client likely disconnected.", this->socket());
@@ -239,10 +242,10 @@ esp_err_t PsychicEventSourceResponse::send()
   out += "\r\n";
 
   int result;
-  uint32_t startmillis = millis();
+  uint32_t startmillis = millis(); // FLO
   do {
     result = httpd_send(request(), out.c_str(), out.length());
-  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL));
+  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL)); // FLO
 
   if (result < 0)
     ESP_LOGE(PH_TAG, "EventSource send failed with %s", esp_err_to_name(result));
@@ -260,7 +263,6 @@ esp_err_t PsychicEventSourceResponse::send()
 static std::string _generateEventMessage_impl(const char* message, const char* event, uint32_t id, uint32_t reconnect)
 {
   std::string ev;
-
   ev.reserve(128); // FLO
 
   if (reconnect) {
