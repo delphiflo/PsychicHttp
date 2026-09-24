@@ -135,6 +135,8 @@ void PsychicEventSource::closeCallback(PsychicClient* client)
  */
 void PsychicEventSource::send(const char* message, const char* event, uint32_t id, uint32_t reconnect)
 {
+  if (!(_server->TakeMutexForClients())) return; // FLO
+
   auto ev = generateEventMessage(message, event, id, reconnect);
   std::vector<PsychicClient*> clientsToRemove;
 
@@ -145,11 +147,11 @@ void PsychicEventSource::send(const char* message, const char* event, uint32_t i
     }
   }
 
-  // Second, iterate through the disconnected clients and clean them up
-  for (PsychicClient* c : clientsToRemove) {
-    closeCallback(c); // Let the user application know
-    removeClient(c);  // Remove from handler and clean up memory
-  }
+  // Second, iterate through the disconnected clients and clean them up  
+  for (PsychicClient* c : clientsToRemove) removeClient(c);  // FLO  
+  for (PsychicClient* c : clientsToRemove) closeCallback(c); // FLO
+
+  _server->GiveMutexForClients(); // FLO
 }
 
 /*****************************************/
@@ -181,9 +183,10 @@ bool PsychicEventSourceClient::send(const char* message, const char* event, uint
 bool PsychicEventSourceClient::sendEvent(const char* event)
 {
   int result;
+  uint32_t startmillis = millis(); // FLO
   do {
     result = httpd_socket_send(this->server(), this->socket(), event, strlen(event), 0);
-  } while (result == HTTPD_SOCK_ERR_TIMEOUT);
+  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL)); // FLO  
 
   if (result < 0) {
     ESP_LOGD(PH_TAG, "sendEvent to socket %d failed. Client likely disconnected.", this->socket());
@@ -202,7 +205,10 @@ PsychicEventSourceResponse::PsychicEventSourceResponse(PsychicResponse* response
 
 esp_err_t PsychicEventSourceResponse::send()
 {
-  std::string out = "HTTP/1.1 200 OK\r\n";
+
+  std::string out; // FLO
+  out.reserve(128); // FLO
+  out = "HTTP/1.1 200 OK\r\n";
 
   // now do our individual headers
   for (auto& header : _response->headers()) {
@@ -216,9 +222,10 @@ esp_err_t PsychicEventSourceResponse::send()
   out += "\r\n";
 
   int result;
+  uint32_t startmillis = millis(); // FLO
   do {
     result = httpd_send(request(), out.c_str(), out.length());
-  } while (result == HTTPD_SOCK_ERR_TIMEOUT);
+  } while ((result == HTTPD_SOCK_ERR_TIMEOUT) && (millis() - startmillis < 100UL)); // FLO
 
   if (result < 0)
     ESP_LOGE(PH_TAG, "EventSource send failed with %s", esp_err_to_name(result));
@@ -236,6 +243,7 @@ esp_err_t PsychicEventSourceResponse::send()
 static std::string _generateEventMessage_impl(const char* message, const char* event, uint32_t id, uint32_t reconnect)
 {
   std::string ev;
+  ev.reserve(128); // FLO
 
   if (reconnect) {
     ev += "retry: ";

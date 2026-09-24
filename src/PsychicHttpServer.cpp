@@ -7,6 +7,7 @@
 #include "PsychicWebSocket.h"
 #include "esp_idf_version.h"
 #include "esp_netif.h"
+#include "freertos/FreeRTOS.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
   #define esp_netif_next_compat(n) esp_netif_next_unsafe(n)
@@ -21,6 +22,8 @@ PsychicHttpServer::PsychicHttpServer(uint16_t port)
 
   defaultEndpoint = new PsychicEndpoint(this, HTTP_GET, "");
   onNotFound(PsychicHttpServer::defaultNotFoundHandler);
+
+  _clientsMutex = xSemaphoreCreateRecursiveMutex(); // FLO
 
   // for a regular server
   config = HTTPD_DEFAULT_CONFIG();
@@ -69,6 +72,17 @@ PsychicHttpServer::~PsychicHttpServer()
 
   delete defaultEndpoint;
   delete _chain;
+
+  if (_clientsMutex != nullptr) vSemaphoreDelete(_clientsMutex); // FLO
+  
+}
+
+bool PsychicHttpServer::TakeMutexForClients() {
+  return (xSemaphoreTakeRecursive(_clientsMutex, portMAX_DELAY) == pdTRUE);  // FLO
+}
+
+void PsychicHttpServer::GiveMutexForClients() {
+  xSemaphoreGiveRecursive(_clientsMutex);  // FLO
 }
 
 void PsychicHttpServer::destroy(void* ctx)
@@ -572,6 +586,8 @@ esp_err_t PsychicHttpServer::openCallback(httpd_handle_t hd, int sockfd)
   // get our global server reference
   PsychicHttpServer* server = (PsychicHttpServer*)httpd_get_global_user_ctx(hd);
 
+  if (!server->TakeMutexForClients()) return ESP_FAIL; // FLO
+
   // lookup our client
   PsychicClient* client = server->getClient(sockfd);
   if (client == NULL) {
@@ -582,6 +598,8 @@ esp_err_t PsychicHttpServer::openCallback(httpd_handle_t hd, int sockfd)
   // user callback
   if (server->_onOpen != NULL)
     server->_onOpen(client);
+
+  server->GiveMutexForClients(); // FLO
 
   return ESP_OK;
 }
@@ -596,6 +614,8 @@ void PsychicHttpServer::closeCallback(httpd_handle_t hd, int sockfd)
   ESP_LOGD(PH_TAG, "Client disconnected %d", sockfd);
 
   PsychicHttpServer* server = (PsychicHttpServer*)httpd_get_global_user_ctx(hd);
+
+  if (!server->TakeMutexForClients()) return; // FLO
 
   // lookup our client
   PsychicClient* client = server->getClient(sockfd);
@@ -618,6 +638,8 @@ void PsychicHttpServer::closeCallback(httpd_handle_t hd, int sockfd)
 
   // finally close it out.
   close(sockfd);
+
+  server->GiveMutexForClients(); // FLO
 }
 
 #ifdef ARDUINO
