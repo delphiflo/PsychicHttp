@@ -44,6 +44,8 @@ class PsychicHttpServer
     esp_err_t _process(PsychicRequest* request);
     bool _filter(PsychicRequest* request);
 
+    SemaphoreHandle_t _clientsMutex = NULL; // FLO
+
   public:
     PsychicHttpServer(uint16_t port = 80);
     virtual ~PsychicHttpServer();
@@ -131,6 +133,9 @@ class PsychicHttpServer
     void onNotFound(PsychicHttpRequestCallback fn);
     void onOpen(PsychicClientCallback handler);
     void onClose(PsychicClientCallback handler);
+
+    bool TakeMutexForClients(); // FLO
+    void GiveMutexForClients(); // FLO
 
 #ifdef ARDUINO
     PsychicStaticFileHandler* serveStatic(const char* uri, fs::FS& fs, const char* path, const char* cache_control = NULL);
